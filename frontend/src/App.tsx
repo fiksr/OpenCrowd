@@ -26,27 +26,60 @@ if (!SESSION_ID) {
   localStorage.setItem('protest_session', SESSION_ID);
 }
 
+// Hardware-only fingerprint — ignores all stored identifiers
+// so incognito mode produces the exact same hash as normal mode
+const getHardwareId = async (): Promise<string> => {
+  const fp = await fpPromise.load();
+  const result = await fp.get();
+  const c = result.components;
+
+  const hardwareSignals = {
+    canvas: c.canvas?.value,
+    webgl: c.webgl?.value,
+    webglVendorAndRenderer: c.webglVendorAndRenderer?.value,
+    audio: c.audio?.value,
+    screenResolution: c.screenResolution?.value,
+    colorDepth: c.colorDepth?.value,
+    hardwareConcurrency: c.hardwareConcurrency?.value,
+    deviceMemory: c.deviceMemory?.value,
+    platform: c.platform?.value,
+    timezone: c.timezone?.value,
+  };
+
+  const str = JSON.stringify(hardwareSignals);
+  const buffer = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(str)
+  );
+  return Array.from(new Uint8Array(buffer))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+};
+
 function App() {
   const [position, setPosition] = useState<[number, number] | null>(null);
   const [status, setStatus] = useState<'idle' | 'locating' | 'submitting' | 'submitted' | 'queued' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [queueCount, setQueueCount] = useState(0);
-  
+
   // Dual-View States
   const [viewMode, setViewMode] = useState<'strict' | 'scientific'>('strict');
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [stats, setStats] = useState({ total_pings: 0, area_sqm: 0, min: 0, max: 0 });
-  
+
   const [deviceId, setDeviceId] = useState<string | null>(null);
 
-  // Initialize FingerprintJS
+  // Initialize hardware fingerprint (incognito-proof)
   useEffect(() => {
-    const initFingerprint = async () => {
-      const fp = await fpPromise.load();
-      const result = await fp.get();
-      setDeviceId(result.visitorId);
-    };
-    initFingerprint();
+    getHardwareId().then(setDeviceId).catch(() => {
+      // Fallback: random ID stored in localStorage if hardware fingerprint fails
+      let fallback = localStorage.getItem('hw_fallback_id');
+      if (!fallback) {
+        fallback = crypto.randomUUID();
+        localStorage.setItem('hw_fallback_id', fallback);
+      }
+      setDeviceId(fallback);
+    });
   }, []);
 
   // Fetch live stats from the database
@@ -70,11 +103,11 @@ function App() {
     };
 
     fetchStats();
-    const interval = setInterval(fetchStats, 5000); // Poll every 5 seconds
-    
+    const interval = setInterval(fetchStats, 5000);
+
     updateQueueCount();
-    const syncInterval = setInterval(syncQueue, 10000); // Try to sync every 10 seconds
-    
+    const syncInterval = setInterval(syncQueue, 10000);
+
     return () => {
       clearInterval(interval);
       clearInterval(syncInterval);
@@ -88,7 +121,7 @@ function App() {
 
   const syncQueue = async () => {
     if (!navigator.onLine) return;
-    
+
     const queue = JSON.parse(localStorage.getItem('offline_queue') || '[]');
     if (queue.length === 0) return;
 
@@ -108,7 +141,7 @@ function App() {
         }
       } catch (err) {
         console.error("Failed to sync item", err);
-        break; 
+        break;
       }
     }
 
@@ -121,7 +154,7 @@ function App() {
       setErrorMessage("Initializing secure connection, please wait...");
       return;
     }
-    
+
     setStatus('locating');
     setErrorMessage('');
 
@@ -143,7 +176,7 @@ function App() {
           accuracy,
           timestamp: new Date().toISOString(),
           sessionId: SESSION_ID,
-          deviceId: deviceId,
+          deviceId,
         };
 
         if (!navigator.onLine) {
@@ -160,7 +193,7 @@ function App() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload),
             });
-            
+
             if (!response.ok) {
               const text = await response.text();
               let errorMsg = `Server error ${response.status}`;
@@ -174,7 +207,7 @@ function App() {
               setErrorMessage(errorMsg);
               return;
             }
-            
+
             setStatus('submitted');
             localStorage.setItem('has_submitted', 'true');
           } catch (err: any) {
@@ -208,12 +241,12 @@ function App() {
 
   return (
     <div className="relative h-[100dvh] w-full flex flex-col font-sans text-slate-100 overflow-hidden">
-      
+
       {/* Map Background */}
       <div className="absolute inset-0 z-0">
-        <MapContainer 
+        <MapContainer
           center={position || [44.8125, 20.4612]}
-          zoom={14} 
+          zoom={14}
           zoomControl={false}
           className="h-full w-full"
         >
@@ -235,16 +268,16 @@ function App() {
       {/* Top Bar - Dual View Stats */}
       <div className="relative z-10 w-full p-6 bg-gradient-to-b from-slate-900 to-transparent">
         <h1 className="text-2xl font-bold tracking-tight text-white mb-4">OpenCrowd</h1>
-        
+
         {/* View Toggle */}
         <div className="flex bg-slate-800/80 backdrop-blur-md rounded-full p-1 mb-4 border border-slate-700">
-          <button 
+          <button
             onClick={() => setViewMode('strict')}
             className={`flex-1 py-2 text-sm font-bold rounded-full transition-all ${viewMode === 'strict' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
           >
             Strict Count
           </button>
-          <button 
+          <button
             onClick={() => setViewMode('scientific')}
             className={`flex-1 py-2 text-sm font-bold rounded-full transition-all ${viewMode === 'scientific' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
           >
@@ -271,13 +304,13 @@ function App() {
                 How does this work?
               </button>
             </div>
-            
+
             <div className="flex items-baseline gap-2 mb-3">
               <span className="text-3xl font-black text-white">{stats.min.toLocaleString()}</span>
               <span className="text-sm font-bold text-slate-500">to</span>
               <span className="text-3xl font-black text-white">{stats.max.toLocaleString()}</span>
             </div>
-            
+
             <div className="pt-3 border-t border-slate-700/50 flex justify-between items-center">
               <p className="text-xs text-slate-400">Total Footprint Area:</p>
               <p className="text-sm font-bold text-slate-200">{stats.area_sqm.toLocaleString()} m²</p>
@@ -297,7 +330,7 @@ function App() {
             <p className="text-sm text-slate-300 mb-4 leading-relaxed">
               Our PostgreSQL database groups nearby GPS pings into a massive spatial polygon to calculate the exact physical square meterage of the crowd. We then apply <strong>Jacobs' Crowd Formula</strong> (1 to 4 people per m²) to extrapolate the true size of the gathering.
             </p>
-            <button 
+            <button
               onClick={() => setShowInfoModal(false)}
               className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl transition-colors"
             >
@@ -312,7 +345,7 @@ function App() {
 
       {/* Bottom Action Bar */}
       <div className="relative z-10 p-6 bg-gradient-to-t from-slate-900 via-slate-900/90 to-transparent flex flex-col items-center pb-[env(safe-area-inset-bottom)]">
-        
+
         {queueCount > 0 && (
           <div className="mb-4 bg-amber-500/20 border border-amber-500/50 text-amber-200 px-4 py-2 rounded-full text-sm font-medium backdrop-blur-sm">
             {queueCount} signal(s) waiting for connection...
@@ -326,7 +359,7 @@ function App() {
         )}
 
         {status === 'idle' && (
-          <button 
+          <button
             onClick={handleCheckIn}
             className="w-full max-w-sm bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold py-5 px-8 rounded-2xl shadow-[0_0_40px_rgba(37,99,235,0.4)] transition-all transform hover:scale-[1.02] active:scale-[0.98] text-xl"
           >
@@ -367,7 +400,7 @@ function App() {
           <div className="w-full max-w-sm p-4 bg-red-900/90 text-red-200 rounded-2xl text-center shadow-lg border border-red-700">
             <p className="font-bold mb-1">Error</p>
             <p className="text-sm opacity-80 mb-3">{errorMessage}</p>
-            <button 
+            <button
               onClick={() => setStatus('idle')}
               className="py-2 px-6 bg-red-800 hover:bg-red-700 rounded-full font-semibold text-sm transition-colors"
             >
