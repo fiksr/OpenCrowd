@@ -116,7 +116,7 @@ function App() {
   };
 
   return (
-    <div className="relative h-screen w-full flex flex-col font-sans text-slate-100">
+    <div className="relative h-[100dvh] w-full flex flex-col font-sans text-slate-100 overflow-hidden">
       
       {/* Map Background */}
       <div className="absolute inset-0 z-0">
