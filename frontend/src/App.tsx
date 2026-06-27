@@ -331,8 +331,12 @@ function App() {
         )}
 
         {status === 'submitted' && (
-          <div className="w-full max-w-sm bg-green-600 text-white font-bold py-5 px-8 rounded-2xl text-center text-xl shadow-[0_0_40px_rgba(22,163,74,0.4)]">
-            ✅ Checked In
+          <div className="w-full text-center flex flex-col items-center gap-2 mt-2">
+            <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 text-2xl border border-emerald-500/30">
+              ✓
+            </div>
+            <p className="text-emerald-400 font-bold text-lg">You've successfully checked in</p>
+            <p className="text-slate-400 text-sm">Your location is expanding the crowd footprint.</p>
           </div>
         )}
 
