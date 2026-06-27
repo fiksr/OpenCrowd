@@ -23,6 +23,29 @@ services:
       - redisdata:/data
     restart: unless-stopped
 
+  backend:
+    build: ./backend
+    container_name: protest-backend
+    depends_on:
+      - db
+      - redis
+    ports:
+      - "3001:3001"
+    environment:
+      - DATABASE_URL=postgresql://protest_user:protest_pass@db:5432/protest_db?schema=public
+      - REDIS_URL=redis://redis:6379
+      - PORT=3001
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: protest-frontend
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    restart: unless-stopped
+
 volumes:
   pgdata:
   redisdata:
