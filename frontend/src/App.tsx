@@ -139,11 +139,11 @@ function App() {
         
         if (navigator.onLine) {
            setStatus('submitted');
+           localStorage.setItem('has_submitted', 'true');
         } else {
            setStatus('queued');
+           localStorage.setItem('has_submitted', 'true');
         }
-        
-        setTimeout(() => setStatus('idle'), 5000); // Reset UI after 5 seconds
       },
       (err) => {
         setStatus('error');
@@ -152,6 +152,13 @@ function App() {
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
+
+  // If already submitted in a previous session, set initial status
+  useEffect(() => {
+    if (localStorage.getItem('has_submitted') === 'true' && status === 'idle') {
+      setStatus('submitted');
+    }
+  }, [status]);
 
   return (
     <div className="relative h-[100dvh] w-full flex flex-col font-sans text-slate-100 overflow-hidden">

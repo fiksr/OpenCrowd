@@ -86,22 +86,27 @@ fastify.get('/api/stats', async (request, reply) => {
     // For now, we return a simple aggregate of total pings.
     // To do true Area Mapping, we would execute a raw SQL query like ST_Area(ST_ConcaveHull(...))
     
-    // We'll write a raw query to calculate the bounding box area roughly:
+    // We buffer each point by 2 meters (giving it a baseline area) 
+    // and union them together. This ensures even 1 person creates an area > 0, 
+    // and a crowd naturally merges into a single continuous polygon.
     const result: any = await prisma.$queryRaw`
       WITH points AS (
-        SELECT ST_SetSRID(ST_MakePoint(lng, lat), 4326) as geom
+        SELECT ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography as geog
         FROM "Submission"
         WHERE timestamp > NOW() - INTERVAL '4 hours'
       ),
-      hull AS (
-        SELECT ST_ConcaveHull(ST_Collect(geom), 0.8) as polygon
+      buffers AS (
+        SELECT ST_Buffer(geog, 2)::geometry as geom
         FROM points
+      ),
+      hull AS (
+        SELECT ST_Union(geom) as polygon
+        FROM buffers
       )
       SELECT 
-        COUNT(*) as total_pings,
+        (SELECT COUNT(*) FROM points) as total_pings,
         COALESCE(ST_Area(polygon::geography), 0) as area_sqm
-      FROM points
-      CROSS JOIN hull;
+      FROM hull;
     `;
 
     const totalPings = Number(result[0]?.total_pings || 0);
