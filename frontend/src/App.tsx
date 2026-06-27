@@ -3,8 +3,11 @@ import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
 // Generate a random session ID on first load to prevent rapid double counting from same device
-const SESSION_ID = localStorage.getItem('protest_session') || 
-  (localStorage.setItem('protest_session', Math.random().toString(36).substring(2, 15)) || localStorage.getItem('protest_session'));
+let SESSION_ID = localStorage.getItem('protest_session');
+if (!SESSION_ID) {
+  SESSION_ID = Math.random().toString(36).substring(2, 15);
+  localStorage.setItem('protest_session', SESSION_ID);
+}
 
 function App() {
   const [position, setPosition] = useState<[number, number] | null>(null);
