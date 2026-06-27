@@ -16,5 +16,5 @@ COPY . .
 # Expose port
 EXPOSE 3001
 
-# Start the server (and automatically push db schema on start for convenience in MVP)
-CMD npm run db:push && npm start
+# Start the server (package.json start script handles the non-interactive DB push)
+CMD ["npm", "start"]
