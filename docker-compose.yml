@@ -1,14 +1,13 @@
-version: '3.8'
-
 services:
   db:
-    image: postgis/postgis:16-3.5
-    platform: linux/arm64
+    image: kartoza/postgis:16-3.4
     container_name: protest-db
-    env_file:
-      - .env
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASS=${POSTGRES_PASSWORD}
+      - POSTGRES_DBNAME=${POSTGRES_DB}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
     restart: unless-stopped
 
   redis:
