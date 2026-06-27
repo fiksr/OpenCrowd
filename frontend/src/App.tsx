@@ -31,19 +31,23 @@ if (!SESSION_ID) {
 const getHardwareId = async (): Promise<string> => {
   const fp = await fpPromise.load();
   const result = await fp.get();
-  const c = result.components;
+  const c = result.components as any;
+
+  const getValue = (component: any) => {
+    return component && 'value' in component ? component.value : undefined;
+  };
 
   const hardwareSignals = {
-    canvas: c.canvas?.value,
-    webgl: c.webgl?.value,
-    webglVendorAndRenderer: c.webglVendorAndRenderer?.value,
-    audio: c.audio?.value,
-    screenResolution: c.screenResolution?.value,
-    colorDepth: c.colorDepth?.value,
-    hardwareConcurrency: c.hardwareConcurrency?.value,
-    deviceMemory: c.deviceMemory?.value,
-    platform: c.platform?.value,
-    timezone: c.timezone?.value,
+    canvas: getValue(c.canvas),
+    webGlBasics: getValue(c.webGlBasics),
+    webGlExtensions: getValue(c.webGlExtensions),
+    audio: getValue(c.audio),
+    screenResolution: getValue(c.screenResolution),
+    colorDepth: getValue(c.colorDepth),
+    hardwareConcurrency: getValue(c.hardwareConcurrency),
+    deviceMemory: getValue(c.deviceMemory),
+    platform: getValue(c.platform),
+    timezone: getValue(c.timezone),
   };
 
   const str = JSON.stringify(hardwareSignals);
