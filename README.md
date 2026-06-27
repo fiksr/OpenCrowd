@@ -48,4 +48,13 @@ The entire application (Frontend, Backend, Database, and Redis) is fully contain
    docker compose up -d --build
    ```
 
+## Future Roadmap: Native Mobile Apps (Android APK & iOS)
+
+A major item on the project's TODO list is developing native mobile clients (Android/iOS). Transitioning from a web-based client to native applications provides critical advantages:
+
+* **Anti-Jamming Mesh Networking (P2P):** During large protests, governments frequently throttle or shut down mobile networks (4G/5G/LTE). Native apps can use hardware radios to establish **Bluetooth Low Energy (BLE) or Wi-Fi Direct peer-to-peer (P2P) mesh networks**. Users can sign and pass their attendance hashes locally through nearby devices until a peer's device with a working internet connection is able to sync the whole pool to the server.
+* **Reliable Background Syncing:** Web browsers heavily restrict background execution and GPS access when a tab is minimized or the screen is turned off. A native app can run background location services and retry syncing queued check-ins much more reliably under extreme network conditions.
+* **Hardened Device Attestation:** Web-based fingerprinting is susceptible to browser emulation and spoofing. Native apps can utilize platform-level security APIs (like **Google Play Integrity API** and **Apple DeviceCheck / App Attest**) to cryptographically verify the device is genuine, untampered, and running a signed version of the app.
+* **Emergency Push Alerts:** Native push notifications can alert users in real time of police movements, safe exit routes, or cellular network status updates without needing an open browser tab.
+
 *Built to support civil transparency. Open source forever.*
