@@ -8,8 +8,7 @@ services:
       - POSTGRES_USER=protest_user
       - POSTGRES_PASSWORD=protest_pass
       - POSTGRES_DB=protest_db
-    ports:
-      - "5432:5432"
+    # Removing direct port exposure, DB stays on internal default network
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
@@ -17,8 +16,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: protest-redis
-    ports:
-      - "6379:6379"
+    # Removing direct port exposure
     volumes:
       - redisdata:/data
     restart: unless-stopped
@@ -29,23 +27,35 @@ services:
     depends_on:
       - db
       - redis
-    ports:
-      - "3001:3001"
+    # Removing direct port exposure, NPM will route to port 3001
     environment:
       - DATABASE_URL=postgresql://protest_user:protest_pass@db:5432/protest_db?schema=public
       - REDIS_URL=redis://redis:6379
       - PORT=3001
     restart: unless-stopped
+    networks:
+      - default
+      - npm_network
 
   frontend:
-    build: ./frontend
+    build: 
+      context: ./frontend
+      args:
+        - VITE_API_URL=${VITE_API_URL} # Set this in a .env file next to docker-compose.yml
     container_name: protest-frontend
     depends_on:
       - backend
-    ports:
-      - "80:80"
+    # Removing direct port exposure, NPM will route to port 80
     restart: unless-stopped
+    networks:
+      - default
+      - npm_network
 
 volumes:
   pgdata:
   redisdata:
+
+networks:
+  npm_network:
+    external: true
+    name: npm_default
