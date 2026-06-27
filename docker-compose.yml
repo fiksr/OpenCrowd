@@ -2,7 +2,8 @@ version: '3.8'
 
 services:
   db:
-    image: postgis/postgis:16-3.4
+    image: postgis/postgis:16-3.5
+    platform: linux/arm64
     container_name: protest-db
     env_file:
       - .env
