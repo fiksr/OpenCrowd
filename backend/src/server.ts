@@ -87,19 +87,49 @@ fastify.post('/api/submit', async (request, reply) => {
   }
 });
 
-// 2. Get Live Stats (Strict Unique Counter)
+// 2. Get Live Stats (Dual View: Strict Counter & Area Estimate)
 fastify.get('/api/stats', async (request, reply) => {
   try {
-    const result: any = await prisma.$queryRaw`
-      SELECT COUNT(DISTINCT "deviceId") as total_unique_people
-      FROM "Submission"
-      WHERE timestamp > NOW() - INTERVAL '12 hours'
-    `;
+    // We execute two queries simultaneously for performance:
+    // 1. A fast COUNT DISTINCT for the strict fingerprint counter
+    // 2. A PostGIS ST_Union polygon calculation for the area footprint
+    const [countResult, spatialResult]: any = await Promise.all([
+      prisma.$queryRaw`
+        SELECT COUNT(DISTINCT "deviceId") as total_unique_people
+        FROM "Submission"
+        WHERE timestamp > NOW() - INTERVAL '12 hours'
+      `,
+      prisma.$queryRaw`
+        WITH points AS (
+          SELECT ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography as geog
+          FROM "Submission"
+          WHERE timestamp > NOW() - INTERVAL '12 hours'
+        ),
+        buffers AS (
+          SELECT ST_Buffer(geog, 2)::geometry as geom
+          FROM points
+        ),
+        hull AS (
+          SELECT ST_Union(geom) as polygon
+          FROM buffers
+        )
+        SELECT COALESCE(ST_Area(polygon::geography), 0) as area_sqm
+        FROM hull;
+      `
+    ]);
 
-    const totalPings = Number(result[0]?.total_unique_people || 0);
+    const totalPings = Number(countResult[0]?.total_unique_people || 0);
+    const areaSqm = Number(spatialResult[0]?.area_sqm || 0);
+
+    // Jacobs' Crowd Formula estimates:
+    const estimateMin = Math.floor(areaSqm * 1); // 1 person per sqm
+    const estimateMax = Math.floor(areaSqm * 4); // 4 people per sqm
 
     return reply.status(200).send({
-      total_pings: totalPings
+      total_pings: totalPings,
+      area_sqm: Math.floor(areaSqm),
+      estimate_min: estimateMin,
+      estimate_max: estimateMax,
     });
   } catch (err) {
     fastify.log.error(err);

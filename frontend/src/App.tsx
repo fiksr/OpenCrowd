@@ -32,8 +32,11 @@ function App() {
   const [errorMessage, setErrorMessage] = useState('');
   const [queueCount, setQueueCount] = useState(0);
   
-  // Total unique verified people
-  const [totalParticipants, setTotalParticipants] = useState(0);
+  // Dual-View States
+  const [viewMode, setViewMode] = useState<'strict' | 'scientific'>('strict');
+  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [stats, setStats] = useState({ total_pings: 0, area_sqm: 0, min: 0, max: 0 });
+  
   const [deviceId, setDeviceId] = useState<string | null>(null);
 
   // Initialize FingerprintJS
@@ -54,7 +57,12 @@ function App() {
         const res = await fetch(`${apiUrl}/api/stats`);
         const data = await res.json();
         if (res.ok) {
-          setTotalParticipants(data.total_pings || 0);
+          setStats({
+            total_pings: data.total_pings || 0,
+            area_sqm: data.area_sqm || 0,
+            min: data.estimate_min || 0,
+            max: data.estimate_max || 0
+          });
         }
       } catch (err) {
         console.error("Failed to fetch live stats", err);
@@ -208,21 +216,80 @@ function App() {
         </MapContainer>
       </div>
 
-      {/* Top Bar - Strict Counter */}
+      {/* Top Bar - Dual View Stats */}
       <div className="relative z-10 w-full p-6 bg-gradient-to-b from-slate-900 to-transparent">
-        <h1 className="text-2xl font-bold tracking-tight text-white mb-2">OpenCrowd</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-white mb-4">OpenCrowd</h1>
         
-        <div className="bg-slate-900/80 backdrop-blur-md rounded-2xl p-6 border border-slate-700 shadow-2xl">
-          <p className="text-slate-400 text-sm font-medium uppercase tracking-wider mb-1">Verified Participants</p>
-          <div className="text-5xl font-black text-white tracking-tighter">
-            {totalParticipants.toLocaleString()}
-          </div>
-          <p className="text-xs text-slate-500 mt-2 flex items-center">
-            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-2"></span>
-            1 Device = 1 Vote (Incognito Proof)
-          </p>
+        {/* View Toggle */}
+        <div className="flex bg-slate-800/80 backdrop-blur-md rounded-full p-1 mb-4 border border-slate-700">
+          <button 
+            onClick={() => setViewMode('strict')}
+            className={`flex-1 py-2 text-sm font-bold rounded-full transition-all ${viewMode === 'strict' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+          >
+            Strict Count
+          </button>
+          <button 
+            onClick={() => setViewMode('scientific')}
+            className={`flex-1 py-2 text-sm font-bold rounded-full transition-all ${viewMode === 'scientific' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+          >
+            Scientific Estimate
+          </button>
         </div>
+
+        {viewMode === 'strict' ? (
+          <div className="bg-slate-900/80 backdrop-blur-md rounded-2xl p-6 border border-blue-900/50 shadow-2xl">
+            <p className="text-slate-400 text-sm font-medium uppercase tracking-wider mb-1">Verified Participants</p>
+            <div className="text-5xl font-black text-white tracking-tighter">
+              {stats.total_pings.toLocaleString()}
+            </div>
+            <p className="text-xs text-slate-400 mt-2 flex items-center">
+              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-2"></span>
+              1 Device = 1 Vote (Incognito Proof)
+            </p>
+          </div>
+        ) : (
+          <div className="bg-slate-900/80 backdrop-blur-md rounded-2xl p-5 border border-purple-900/50 shadow-2xl">
+            <div className="flex justify-between items-start mb-2">
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Jacobs' Crowd Estimate</p>
+              <button onClick={() => setShowInfoModal(true)} className="text-purple-400 hover:text-purple-300 text-xs font-bold underline">
+                How does this work?
+              </button>
+            </div>
+            
+            <div className="flex items-baseline gap-2 mb-3">
+              <span className="text-3xl font-black text-white">{stats.min.toLocaleString()}</span>
+              <span className="text-sm font-bold text-slate-500">to</span>
+              <span className="text-3xl font-black text-white">{stats.max.toLocaleString()}</span>
+            </div>
+            
+            <div className="pt-3 border-t border-slate-700/50 flex justify-between items-center">
+              <p className="text-xs text-slate-400">Total Footprint Area:</p>
+              <p className="text-sm font-bold text-slate-200">{stats.area_sqm.toLocaleString()} m²</p>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Info Modal */}
+      {showInfoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <h2 className="text-xl font-bold text-white mb-3">The Science of Counting</h2>
+            <p className="text-sm text-slate-300 mb-3 leading-relaxed">
+              When cellular networks jam at large protests, not everyone can check in. To counter this, we use <strong>Area Footprint Mapping</strong>.
+            </p>
+            <p className="text-sm text-slate-300 mb-4 leading-relaxed">
+              Our PostgreSQL database groups nearby GPS pings into a massive spatial polygon to calculate the exact physical square meterage of the crowd. We then apply <strong>Jacobs' Crowd Formula</strong> (1 to 4 people per m²) to extrapolate the true size of the gathering.
+            </p>
+            <button 
+              onClick={() => setShowInfoModal(false)}
+              className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl transition-colors"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Spacer */}
       <div className="flex-1" />
