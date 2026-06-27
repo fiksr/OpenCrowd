@@ -1,0 +1,22 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+model Submission {
+  id        String   @id @default(uuid())
+  lat       Float
+  lng       Float
+  accuracy  Float
+  timestamp DateTime
+  sessionId String
+
+  @@index([sessionId])
+  @@index([timestamp])
+}
