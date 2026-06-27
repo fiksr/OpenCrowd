@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import fpPromise from '@fingerprintjs/fingerprintjs';
 
 // Fix for broken default Leaflet markers in Vite
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
@@ -18,7 +19,7 @@ const DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-// Generate a random session ID on first load to prevent rapid double counting from same device
+// Generate a random session ID for temporary UI stuff
 let SESSION_ID = localStorage.getItem('protest_session');
 if (!SESSION_ID) {
   SESSION_ID = Math.random().toString(36).substring(2, 15);
@@ -27,13 +28,23 @@ if (!SESSION_ID) {
 
 function App() {
   const [position, setPosition] = useState<[number, number] | null>(null);
-  const [accuracy, setAccuracy] = useState<number | null>(null);
-  const [status, setStatus] = useState<'idle' | 'locating' | 'submitted' | 'queued' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'locating' | 'submitting' | 'submitted' | 'queued' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [queueCount, setQueueCount] = useState(0);
   
-  // Dummy stats for MVP UI
-  const [stats, setStats] = useState({ area: 0, min: 0, max: 0 });
+  // Total unique verified people
+  const [totalParticipants, setTotalParticipants] = useState(0);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
+
+  // Initialize FingerprintJS
+  useEffect(() => {
+    const initFingerprint = async () => {
+      const fp = await fpPromise.load();
+      const result = await fp.get();
+      setDeviceId(result.visitorId);
+    };
+    initFingerprint();
+  }, []);
 
   // Fetch live stats from the database
   useEffect(() => {
@@ -43,11 +54,7 @@ function App() {
         const res = await fetch(`${apiUrl}/api/stats`);
         const data = await res.json();
         if (res.ok) {
-          setStats({
-            area: data.area_sqm || 0,
-            min: data.estimate_min || 0,
-            max: data.estimate_max || 0
-          });
+          setTotalParticipants(data.total_pings || 0);
         }
       } catch (err) {
         console.error("Failed to fetch live stats", err);
@@ -67,17 +74,17 @@ function App() {
   }, []);
 
   const updateQueueCount = () => {
-    const queue = JSON.parse(localStorage.getItem('sync_queue') || '[]');
+    const queue = JSON.parse(localStorage.getItem('offline_queue') || '[]');
     setQueueCount(queue.length);
   };
 
   const syncQueue = async () => {
     if (!navigator.onLine) return;
-
-    const queue = JSON.parse(localStorage.getItem('sync_queue') || '[]');
+    
+    const queue = JSON.parse(localStorage.getItem('offline_queue') || '[]');
     if (queue.length === 0) return;
 
-    const remainingQueue = [];
+    let remainingQueue = [...queue];
 
     for (const item of queue) {
       try {
@@ -88,61 +95,76 @@ function App() {
           body: JSON.stringify(item),
         });
 
-        if (!response.ok) {
-          // If 400 bad request (e.g. too old), we drop it. If 500 or network error, keep in queue.
-          if (response.status >= 500 || response.status === 429) {
-            remainingQueue.push(item);
-          }
+        if (response.ok) {
+          remainingQueue = remainingQueue.filter((qItem) => qItem.timestamp !== item.timestamp);
         }
       } catch (err) {
-        // Network error, keep in queue
-        remainingQueue.push(item);
+        console.error("Failed to sync item", err);
+        break; 
       }
     }
 
-    localStorage.setItem('sync_queue', JSON.stringify(remainingQueue));
-    updateQueueCount();
+    localStorage.setItem('offline_queue', JSON.stringify(remainingQueue));
+    setQueueCount(remainingQueue.length);
   };
 
-  const saveToQueue = (lat: number, lng: number, accuracy: number) => {
-    const item = {
-      lat,
-      lng,
-      accuracy,
-      timestamp: new Date().toISOString(),
-      sessionId: SESSION_ID,
-    };
-
-    const queue = JSON.parse(localStorage.getItem('sync_queue') || '[]');
-    queue.push(item);
-    localStorage.setItem('sync_queue', JSON.stringify(queue));
-    updateQueueCount();
-    syncQueue(); // Try immediately
-  };
-
-  const handleImHere = () => {
-    setStatus('locating');
+  const handleCheckIn = () => {
+    if (!deviceId) {
+      setErrorMessage("Initializing secure connection, please wait...");
+      return;
+    }
     
+    setStatus('locating');
+    setErrorMessage('');
+
     if (!navigator.geolocation) {
       setStatus('error');
-      setErrorMessage('Geolocation is not supported by your browser');
+      setErrorMessage('Geolocation is not supported by your browser.');
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
         const { latitude, longitude, accuracy } = pos.coords;
         setPosition([latitude, longitude]);
-        setAccuracy(accuracy);
-        
-        saveToQueue(latitude, longitude, accuracy);
-        
-        if (navigator.onLine) {
-           setStatus('submitted');
-           localStorage.setItem('has_submitted', 'true');
+        setStatus('submitting');
+
+        const payload = {
+          lat: latitude,
+          lng: longitude,
+          accuracy,
+          timestamp: new Date().toISOString(),
+          sessionId: SESSION_ID,
+          deviceId: deviceId, // Secure hardware fingerprint
+        };
+
+        if (!navigator.onLine) {
+          const queue = JSON.parse(localStorage.getItem('offline_queue') || '[]');
+          queue.push(payload);
+          localStorage.setItem('offline_queue', JSON.stringify(queue));
+          updateQueueCount();
+          setStatus('queued');
         } else {
-           setStatus('queued');
-           localStorage.setItem('has_submitted', 'true');
+          try {
+            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const response = await fetch(`${apiUrl}/api/submit`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            if (!response.ok) {
+              const resData = await response.json();
+              throw new Error(resData.error || 'Failed to submit');
+            }
+            setStatus('submitted');
+            localStorage.setItem('has_submitted', 'true');
+          } catch (err: any) {
+            const queue = JSON.parse(localStorage.getItem('offline_queue') || '[]');
+            queue.push(payload);
+            localStorage.setItem('offline_queue', JSON.stringify(queue));
+            updateQueueCount();
+            setStatus('queued');
+          }
         }
       },
       (err) => {
@@ -166,70 +188,84 @@ function App() {
       {/* Map Background */}
       <div className="absolute inset-0 z-0">
         <MapContainer 
-          center={[44.8125, 20.4612]} // Belgrade coordinates
+          center={position || [44.8125, 20.4612]} // Default Belgrade
           zoom={14} 
           zoomControl={false}
           className="h-full w-full"
         >
           <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-            attribution='&copy; <a href="https://carto.com/">CartoDB</a>'
           />
           {position && (
             <>
+              <Circle center={position} radius={50} pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.2 }} />
               <Marker position={position}>
-                <Popup>You are here!</Popup>
+                <Popup>You are here</Popup>
               </Marker>
-              <Circle center={position} radius={accuracy || 10} pathOptions={{ color: 'blue', fillColor: 'blue' }} />
             </>
           )}
         </MapContainer>
       </div>
 
-      {/* Stats Overlay */}
-      <div className="absolute top-0 left-0 right-0 z-10 p-4 bg-gradient-to-b from-slate-900/90 to-transparent pointer-events-none">
-        <div className="max-w-md mx-auto text-center space-y-1">
-          <h1 className="text-xl font-bold tracking-tight text-white drop-shadow-md">Live Crowd Estimate</h1>
-          <div className="flex justify-center items-baseline gap-2">
-            <span className="text-3xl font-black text-emerald-400 drop-shadow-lg">{stats.min.toLocaleString()}</span>
-            <span className="text-slate-300">to</span>
-            <span className="text-3xl font-black text-emerald-400 drop-shadow-lg">{stats.max.toLocaleString()}</span>
+      {/* Top Bar - Strict Counter */}
+      <div className="relative z-10 w-full p-6 bg-gradient-to-b from-slate-900 to-transparent">
+        <h1 className="text-2xl font-bold tracking-tight text-white mb-2">OpenCrowd</h1>
+        
+        <div className="bg-slate-900/80 backdrop-blur-md rounded-2xl p-6 border border-slate-700 shadow-2xl">
+          <p className="text-slate-400 text-sm font-medium uppercase tracking-wider mb-1">Verified Participants</p>
+          <div className="text-5xl font-black text-white tracking-tighter">
+            {totalParticipants.toLocaleString()}
           </div>
-          <p className="text-xs text-slate-400 uppercase tracking-widest font-semibold mt-1">
-            Proven footprint: {stats.area.toLocaleString()} m²
+          <p className="text-xs text-slate-500 mt-2 flex items-center">
+            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-2"></span>
+            1 Device = 1 Vote (Incognito Proof)
           </p>
         </div>
       </div>
 
-      {/* Queue indicator */}
-      {queueCount > 0 && (
-        <div className="absolute top-24 left-1/2 transform -translate-x-1/2 z-10 px-3 py-1 bg-yellow-600/90 text-yellow-100 text-xs font-bold rounded-full shadow-lg">
-          {queueCount} check-in(s) waiting for internet...
-        </div>
-      )}
+      {/* Spacer */}
+      <div className="flex-1" />
 
-      {/* Action Bar (Bottom) */}
-      <div className="absolute bottom-0 left-0 right-0 z-10 p-6 bg-gradient-to-t from-slate-900 via-slate-900/90 to-transparent flex flex-col items-center">
+      {/* Bottom Action Bar */}
+      <div className="relative z-10 p-6 bg-gradient-to-t from-slate-900 via-slate-900/90 to-transparent flex flex-col items-center pb-[env(safe-area-inset-bottom)]">
+        
+        {queueCount > 0 && (
+          <div className="mb-4 bg-amber-500/20 border border-amber-500/50 text-amber-200 px-4 py-2 rounded-full text-sm font-medium backdrop-blur-sm">
+            {queueCount} signal(s) waiting for connection...
+          </div>
+        )}
+
+        {errorMessage && (
+          <div className="mb-4 bg-red-500/20 border border-red-500/50 text-red-200 px-4 py-2 rounded-xl text-sm w-full max-w-sm text-center backdrop-blur-sm">
+            {errorMessage}
+          </div>
+        )}
+
         {status === 'idle' && (
           <button 
-            onClick={handleImHere}
-            className="w-full max-w-sm py-4 px-8 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold rounded-full shadow-[0_0_20px_rgba(37,99,235,0.4)] transition-all transform active:scale-95 text-lg"
+            onClick={handleCheckIn}
+            className="w-full max-w-sm bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold py-5 px-8 rounded-2xl shadow-[0_0_40px_rgba(37,99,235,0.4)] transition-all transform hover:scale-[1.02] active:scale-[0.98] text-xl"
           >
-            I'M HERE (Count Me)
+            I'M HERE
           </button>
         )}
 
         {status === 'locating' && (
-          <div className="w-full max-w-sm py-4 px-8 bg-slate-800 text-slate-300 font-semibold rounded-full text-center flex items-center justify-center gap-3 shadow-lg border border-slate-700">
-            <div className="w-5 h-5 border-2 border-slate-400 border-t-white rounded-full animate-spin"></div>
+          <div className="w-full max-w-sm bg-slate-800 text-white font-bold py-5 px-8 rounded-2xl text-center text-xl animate-pulse">
             Acquiring GPS Signal...
           </div>
         )}
 
+        {status === 'submitting' && (
+          <div className="w-full max-w-sm bg-slate-800 text-white font-bold py-5 px-8 rounded-2xl text-center text-xl animate-pulse">
+            Verifying Device...
+          </div>
+        )}
+
         {status === 'submitted' && (
-          <div className="w-full max-w-sm py-4 px-8 bg-emerald-900/80 text-emerald-300 font-bold rounded-full text-center shadow-[0_0_20px_rgba(16,185,129,0.2)] border border-emerald-700/50 flex flex-col items-center gap-1">
-            <span className="text-emerald-400 text-lg">✓ Verified</span>
-            <span className="text-xs font-medium text-emerald-500/80">You've expanded the crowd footprint.</span>
+          <div className="w-full max-w-sm bg-green-600 text-white font-bold py-5 px-8 rounded-2xl text-center text-xl shadow-[0_0_40px_rgba(22,163,74,0.4)]">
+            ✅ Checked In
           </div>
         )}
 

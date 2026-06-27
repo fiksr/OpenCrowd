@@ -4,9 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "tsx src/server.ts",
+    "start": "npx prisma db push --accept-data-loss && tsx src/server.ts",
     "db:push": "prisma db push",
-    "generate": "prisma generate"
+    "generate": "prisma generate",
+    "dev": "tsx watch src/server.ts"
   },
   "keywords": [],
   "author": "",

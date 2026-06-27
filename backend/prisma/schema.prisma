@@ -16,6 +16,7 @@ model Submission {
   accuracy  Float
   timestamp DateTime
   sessionId String
+  deviceId  String   @unique
 
   @@index([sessionId])
   @@index([timestamp])
