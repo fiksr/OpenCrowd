@@ -1,40 +1,37 @@
 # OpenCrowd
 
-**OpenCrowd** is an open-source, privacy-first tool designed to cryptographically map crowd footprints and estimate attendance at public protests.
+**OpenCrowd** is an open-source, privacy-first tool designed to cryptographically map crowd footprints and provide undeniable proof of attendance at public protests.
 
-Instead of relying on subjective user estimates or manual headcounts, OpenCrowd uses the GPS signals of participants to mathematically draw a bounding box (polygon) around the contiguous crowd footprint. Using Jacobs' Crowd Formula, this area is then used to scientifically extrapolate minimum and maximum crowd size estimates.
+When governments and media drastically undercount the size of protests, OpenCrowd provides verifiable, data-backed evidence of crowd sizes using two complementary approaches.
+
+## The Dual-View System
+
+OpenCrowd features a dual-view analytics engine that gives you the best of both worlds:
+
+1. **Strict Counter (The Hard Proof):** A massive absolute counter. OpenCrowd uses browser and hardware fingerprinting (`FingerprintJS`) to assign an unbreakable "Device ID" to every user. This ensures **1 Device = 1 Vote**. Even if an attacker opens 100 Incognito tabs to try and inflate the numbers, the database strictly blocks duplicates.
+2. **Scientific Estimate (Area Footprint Mapping):** When cellular networks jam at massive protests, not everyone can check in. To account for this, the database uses PostGIS to draw a 2-meter physical circle around every single GPS ping, merging them all into one massive spatial polygon. We then apply **Jacobs' Crowd Formula** (1 to 4 people per m²) to scientifically extrapolate the true size of the gathering based on the physical square meterage of the crowd footprint.
 
 ## Features
 - **Privacy-First:** No accounts, no names, no personal data.
-- **Area Footprint Mapping:** Uses PostGIS to dynamically cluster check-ins and calculate square meterage.
-- **Offline-Sync Queue:** If cellular networks are jammed during a protest, the app securely queues check-ins in local storage and background-syncs them to the server the moment an internet connection is re-established.
-- **Security-Hardened:** Built with Zod validation, invisible Turnstile CAPTCHA (ready), and Redis-backed strict rate limiting to prevent DDoS or bot-brigading.
+- **Hardware Fingerprinting:** Immune to incognito/private-browsing spam.
+- **Dual Analytics:** Toggle between strict Verified Participants and Scientific Footprint Estimates.
+- **Offline-Sync Queue:** If cellular networks drop, the app silently queues your GPS check-in offline and background-syncs to the server the moment your 4G/5G connection returns.
+- **Cloudflare Ready:** Built to sit behind Cloudflare Turnstile for enterprise-grade bot protection.
 
 ## Tech Stack
-- **Frontend:** React, Vite, Tailwind CSS, Leaflet
+- **Frontend:** React, Vite, Tailwind CSS, Leaflet, FingerprintJS
 - **Backend:** Node.js, Fastify, Prisma ORM, Redis
-- **Database:** PostgreSQL with PostGIS extension
+- **Database:** PostgreSQL with PostGIS extension (kartoza/postgis:16-3.4 for ARM64 compatibility)
 
-## Quickstart (Local Development)
+## Deployment (Production & Local)
 
-The easiest way to run the database layer is via Docker.
+The entire application (Frontend, Backend, Database, and Redis) is fully containerized.
 
-1. Start the PostgreSQL (PostGIS) and Redis containers:
+1. Ensure Docker and Docker Compose are installed.
+2. Clone the repository and configure your `.env` files (see `.env.example` inside backend and frontend folders).
+3. Build and deploy the entire stack:
    ```bash
-   docker compose up -d
-   ```
-2. Start the Backend API:
-   ```bash
-   cd backend
-   npm install
-   npx prisma db push
-   npm start
-   ```
-3. Start the Frontend App:
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
+   docker compose up -d --build
    ```
 
 *Built to support civil transparency. Open source forever.*
