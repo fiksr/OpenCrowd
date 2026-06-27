@@ -359,7 +359,7 @@ function App() {
 
         {status === 'error' && (
           <div className="w-full max-w-sm p-4 bg-red-900/90 text-red-200 rounded-2xl text-center shadow-lg border border-red-700">
-            <p className="font-bold mb-1">Failed to get location</p>
+            <p className="font-bold mb-1">Error</p>
             <p className="text-sm opacity-80 mb-3">{errorMessage}</p>
             <button 
               onClick={() => setStatus('idle')}
