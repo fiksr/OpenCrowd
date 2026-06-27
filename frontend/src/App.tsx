@@ -160,18 +160,28 @@ function App() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload),
             });
+            
             if (!response.ok) {
-              const resData = await response.json();
-              throw new Error(resData.error || 'Failed to submit');
+              const resData = await response.json().catch(() => ({}));
+              setStatus('error');
+              setErrorMessage(resData.error || 'Submission rejected by server.');
+              return;
             }
+            
             setStatus('submitted');
             localStorage.setItem('has_submitted', 'true');
           } catch (err: any) {
-            const queue = JSON.parse(localStorage.getItem('offline_queue') || '[]');
-            queue.push(payload);
-            localStorage.setItem('offline_queue', JSON.stringify(queue));
-            updateQueueCount();
-            setStatus('queued');
+            if (err.name === 'TypeError') {
+              // Actual network error
+              const queue = JSON.parse(localStorage.getItem('offline_queue') || '[]');
+              queue.push(payload);
+              localStorage.setItem('offline_queue', JSON.stringify(queue));
+              updateQueueCount();
+              setStatus('queued');
+            } else {
+              setStatus('error');
+              setErrorMessage(err.message || 'An unexpected error occurred.');
+            }
           }
         }
       },

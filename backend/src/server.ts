@@ -35,9 +35,10 @@ fastify.post('/api/submit', async (request, reply) => {
     const data = submitSchema.parse(request.body);
 
     // Filter out very poor accuracy
-    if (data.accuracy > 50) {
-      return reply.status(400).send({ error: 'GPS accuracy too low (must be < 50m)' });
-    }
+    // Temporarily disabled for testing since indoor testing often yields >50m accuracy
+    // if (data.accuracy > 50) {
+    //  return reply.status(400).send({ error: 'GPS accuracy too low (must be < 50m)' });
+    // }
     
     const clientTime = new Date(data.timestamp);
     const now = new Date();
