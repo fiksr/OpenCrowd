@@ -143,7 +143,7 @@ function App() {
           accuracy,
           timestamp: new Date().toISOString(),
           sessionId: SESSION_ID,
-          deviceId: deviceId, // Secure hardware fingerprint
+          deviceId: deviceId,
         };
 
         if (!navigator.onLine) {
@@ -162,9 +162,16 @@ function App() {
             });
             
             if (!response.ok) {
-              const resData = await response.json().catch(() => ({}));
+              const text = await response.text();
+              let errorMsg = `Server error ${response.status}`;
+              try {
+                const resData = JSON.parse(text);
+                errorMsg = resData.error || resData.message || JSON.stringify(resData);
+              } catch (e) {
+                errorMsg = `HTTP ${response.status}: ${text.substring(0, 100)}`;
+              }
               setStatus('error');
-              setErrorMessage(resData.error || 'Submission rejected by server.');
+              setErrorMessage(errorMsg);
               return;
             }
             
@@ -172,7 +179,6 @@ function App() {
             localStorage.setItem('has_submitted', 'true');
           } catch (err: any) {
             if (err.name === 'TypeError') {
-              // Actual network error
               const queue = JSON.parse(localStorage.getItem('offline_queue') || '[]');
               queue.push(payload);
               localStorage.setItem('offline_queue', JSON.stringify(queue));
@@ -206,7 +212,7 @@ function App() {
       {/* Map Background */}
       <div className="absolute inset-0 z-0">
         <MapContainer 
-          center={position || [44.8125, 20.4612]} // Default Belgrade
+          center={position || [44.8125, 20.4612]}
           zoom={14} 
           zoomControl={false}
           className="h-full w-full"

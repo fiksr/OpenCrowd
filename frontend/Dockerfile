@@ -5,20 +5,18 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# Accept build arguments
-ARG VITE_API_URL
-ENV VITE_API_URL=$VITE_API_URL
-
 COPY . .
 RUN npm run build
 
 # Production Serving Stage
 FROM nginx:alpine
 
+# Use custom nginx config that proxies /api to backend
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
 # Copy built assets to Nginx
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Expose port 80 (internal to docker network)
 EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]
