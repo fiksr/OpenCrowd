@@ -19,13 +19,35 @@ function App() {
   // Dummy stats for MVP UI
   const [stats, setStats] = useState({ area: 0, min: 0, max: 0 });
 
-  // On mount and periodically, try to sync queued items
+  // Fetch live stats from the database
   useEffect(() => {
-    setStats({ area: 65000, min: 130000, max: 260000 }); // Mock stats
+    const fetchStats = async () => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+        const res = await fetch(`${apiUrl}/api/stats`);
+        const data = await res.json();
+        if (res.ok) {
+          setStats({
+            area: data.area_sqm || 0,
+            min: data.estimate_min || 0,
+            max: data.estimate_max || 0
+          });
+        }
+      } catch (err) {
+        console.error("Failed to fetch live stats", err);
+      }
+    };
+
+    fetchStats();
+    const interval = setInterval(fetchStats, 5000); // Poll every 5 seconds
     
     updateQueueCount();
-    const interval = setInterval(syncQueue, 10000); // Try to sync every 10 seconds
-    return () => clearInterval(interval);
+    const syncInterval = setInterval(syncQueue, 10000); // Try to sync every 10 seconds
+    
+    return () => {
+      clearInterval(interval);
+      clearInterval(syncInterval);
+    };
   }, []);
 
   const updateQueueCount = () => {
