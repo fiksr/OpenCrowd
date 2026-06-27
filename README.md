@@ -52,6 +52,16 @@ The entire application (Frontend, Backend, Database, and Redis) is fully contain
    docker compose up -d --build
    ```
 
+## Production Notes: Bot Protection (Cloudflare Turnstile)
+
+To protect the submission API against programmatic bot spam (which bypasses browser fingerprinting), the system is designed to support **Cloudflare Turnstile**:
+* **Current Status:** The backend has a placeholder in its validation schema (`turnstileToken: z.string().optional()`), but the verification logic is not yet active.
+* **Todo (Setup Required):** To fully enable Turnstile:
+  1. Register your domain on Cloudflare and obtain a Turnstile Site Key and Secret Key.
+  2. Load the Turnstile API script and render the widget in the React frontend.
+  3. Send the generated token in the `POST /api/submit` request.
+  4. Implement the backend `siteverify` request to `https://challenges.cloudflare.com/turnstile/v0/siteverify` using the token and your Secret Key.
+
 ## Current Web Platform Limitations
 
 While the web-based client is highly accessible and requires zero installation, the web platform imposes several strict security and hardware limitations:
