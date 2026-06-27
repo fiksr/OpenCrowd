@@ -4,6 +4,10 @@
 
 When governments and media drastically undercount the size of protests, OpenCrowd provides verifiable, data-backed evidence of crowd sizes using two complementary approaches.
 
+## Live Demo & Testing
+
+A live testing instance of the application is available at: **[https://opencrowd.fikser.lol/](https://opencrowd.fikser.lol/)**
+
 ## The Dual-View System
 
 OpenCrowd features a dual-view analytics engine that gives you the best of both worlds:
