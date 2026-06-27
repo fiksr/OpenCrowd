@@ -11,6 +11,20 @@ OpenCrowd features a dual-view analytics engine that gives you the best of both 
 1. **Strict Counter (The Hard Proof):** A massive absolute counter. OpenCrowd uses browser and hardware fingerprinting (`FingerprintJS`) to assign an unbreakable "Device ID" to every user. This ensures **1 Device = 1 Vote**. Even if an attacker opens 100 Incognito tabs to try and inflate the numbers, the database strictly blocks duplicates.
 2. **Scientific Estimate (Area Footprint Mapping):** When cellular networks jam at massive protests, not everyone can check in. To account for this, the database uses PostGIS to draw a 2-meter physical circle around every single GPS ping, merging them all into one massive spatial polygon. We then apply **Jacobs' Crowd Formula** (1 to 4 people per m²) to scientifically extrapolate the true size of the gathering based on the physical square meterage of the crowd footprint.
 
+## How the Hardware ID Works (Incognito-Proof)
+
+To block spam, OpenCrowd implements a custom, **storage-independent hardware fingerprinting** system:
+
+* **The Problem with Standard Fingerprinting:** Standard fingerprinting libraries typically rely on `localStorage`, `sessionStorage`, cookies, or browser database mechanisms to store and track unique visitor IDs. When a user switches to Incognito/Private Browsing, these storages are isolated or cleared, allowing a malicious actor to generate a new ID and submit multiple votes from the same device.
+* **The OpenCrowd Solution:** OpenCrowd bypasses the library's standard `visitorId` and instead extracts the raw, hardware-only entropy signals gathered by the library:
+  - **Canvas & WebGL:** Mathematical rendering characteristics of 2D/3D shapes, along with the unmasked GPU chip vendor and renderer details (e.g. `webGlBasics` and `webGlExtensions`).
+  - **System Specifications:** Physical CPU core count (`hardwareConcurrency`), estimated system RAM size (`deviceMemory`), and platform type.
+  - **Subsystems:** The mathematical profile of the browser's audio processing architecture (`audio`).
+  - **Display Metrics:** Physical screen resolution, color depth, and system timezone.
+* **Cryptographic Hashing:** These stable, hardware-tied metrics are serialized into a JSON string and hashed client-side using a **SHA-256** digest via the native Web Crypto API (`crypto.subtle`). 
+
+Since none of these hardware attributes change when opening a private tab, the resulting SHA-256 hash is identical whether the user is in normal browsing, private browsing, or incognito mode.
+
 ## Features
 - **Privacy-First:** No accounts, no names, no personal data.
 - **Hardware Fingerprinting:** Immune to incognito/private-browsing spam.
