@@ -48,6 +48,15 @@ The entire application (Frontend, Backend, Database, and Redis) is fully contain
    docker compose up -d --build
    ```
 
+## Current Web Platform Limitations
+
+While the web-based client is highly accessible and requires zero installation, the web platform imposes several strict security and hardware limitations:
+
+* **Spoofing & Emulation Risks:** Web browsers do not have hardware-level cryptographic keys. A sophisticated attacker running headless browsers (like Puppeteer or Playwright) can programmatically spoof user agents, canvas fingerprints, and WebGL specifications to bypass duplicate checks.
+* **Aggressive Background Sleep:** Mobile operating systems (iOS and Android) aggressively freeze or suspend browser tabs when they are minimized or when the screen is locked. This means offline check-in syncing cannot run continuously in the background.
+* **No Offline Peer-to-Peer Relay:** Web browsers do not expose access to raw Bluetooth or Wi-Fi Direct radios. If cellular networks (4G/5G) are jammed at a protest site, web users cannot check in or relay their location pings through nearby devices.
+* **Notification Barriers:** Real-time push alerts are difficult to deliver on mobile web browsers. On iOS, for example, web push notifications are blocked unless the visitor manually adds the site to their home screen as a Progressive Web App (PWA).
+
 ## Future Roadmap: Native Mobile Apps (Android APK & iOS)
 
 A major item on the project's TODO list is developing native mobile clients (Android/iOS). Transitioning from a web-based client to native applications provides critical advantages:
